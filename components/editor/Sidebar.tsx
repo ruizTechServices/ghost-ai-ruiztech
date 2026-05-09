@@ -1,31 +1,33 @@
 "use client";
 
-import { FolderOpen, Plus, Users, X } from "lucide-react";
+import { FolderOpen, MoreHorizontal, Pencil, Plus, Trash2, Users, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import type {
+  MockProject,
+  useProjectDialogs,
+} from "@/components/editor/useProjectDialogs";
 import { cn } from "@/lib/utils";
 
 interface SidebarProps {
+  dialogs: ReturnType<typeof useProjectDialogs>;
   isOpen: boolean;
   onClose: () => void;
 }
 
-const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
+const Sidebar = ({ dialogs, isOpen, onClose }: SidebarProps) => {
   return (
     <aside
       aria-hidden={!isOpen}
@@ -58,28 +60,13 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
         </Tooltip>
       </div>
 
-      <Dialog>
-        <DialogTrigger
-          render={
-            <Button className="mt-5 w-full justify-center rounded-xl" />
-          }
-        >
-          <Plus className="h-4 w-4" />
-          New Project
-        </DialogTrigger>
-        <DialogContent className="rounded-3xl border border-surface-border bg-bg-elevated">
-          <DialogHeader>
-            <DialogTitle>New Project</DialogTitle>
-            <DialogDescription>
-              Project creation fields will be added when the project workflow is
-              implemented.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter showCloseButton>
-            <Button disabled>Create project</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <Button
+        className="mt-5 w-full justify-center rounded-xl"
+        onClick={dialogs.openCreateDialog}
+      >
+        <Plus className="h-4 w-4" />
+        New Project
+      </Button>
 
       <Tabs className="mt-5 min-h-0 flex-1" defaultValue="projects">
         <TabsList className="grid w-full grid-cols-2 rounded-xl bg-bg-subtle">
@@ -87,27 +74,109 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
           <TabsTrigger value="shared">Shared</TabsTrigger>
         </TabsList>
         <TabsContent
-          className="mt-4 flex min-h-0 flex-1 items-center justify-center rounded-2xl border border-dashed border-surface-border bg-bg-surface/70 p-6"
+          className="mt-4 min-h-0 flex-1 rounded-2xl border border-surface-border bg-bg-surface/70 p-3"
           value="projects"
         >
-          <EmptyState
-            icon={<FolderOpen className="h-8 w-8" />}
-            title="No projects yet"
-            description="Created projects will appear here."
-          />
+          {dialogs.ownedProjects.length > 0 ? (
+            <ProjectList
+              onDelete={dialogs.openDeleteDialog}
+              onRename={dialogs.openRenameDialog}
+              projects={dialogs.ownedProjects}
+              showActions
+            />
+          ) : (
+            <EmptyState
+              icon={<FolderOpen className="h-8 w-8" />}
+              title="No projects yet"
+              description="Created projects will appear here."
+            />
+          )}
         </TabsContent>
         <TabsContent
-          className="mt-4 flex min-h-0 flex-1 items-center justify-center rounded-2xl border border-dashed border-surface-border bg-bg-surface/70 p-6"
+          className="mt-4 min-h-0 flex-1 rounded-2xl border border-surface-border bg-bg-surface/70 p-3"
           value="shared"
         >
-          <EmptyState
-            icon={<Users className="h-8 w-8" />}
-            title="Nothing shared"
-            description="Collaborative projects will appear here."
-          />
+          {dialogs.sharedProjects.length > 0 ? (
+            <ProjectList
+              onDelete={dialogs.openDeleteDialog}
+              onRename={dialogs.openRenameDialog}
+              projects={dialogs.sharedProjects}
+            />
+          ) : (
+            <EmptyState
+              icon={<Users className="h-8 w-8" />}
+              title="Nothing shared"
+              description="Collaborative projects will appear here."
+            />
+          )}
         </TabsContent>
       </Tabs>
     </aside>
+  );
+};
+
+interface ProjectListProps {
+  onDelete: (project: MockProject) => void;
+  onRename: (project: MockProject) => void;
+  projects: MockProject[];
+  showActions?: boolean;
+}
+
+const ProjectList = ({
+  onDelete,
+  onRename,
+  projects,
+  showActions = false,
+}: ProjectListProps) => {
+  return (
+    <div className="space-y-2">
+      {projects.map((project) => (
+        <div
+          className="flex min-h-14 items-center justify-between gap-3 rounded-xl border border-surface-border bg-bg-subtle/70 px-3 py-2"
+          key={project.id}
+        >
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium text-copy-primary">
+              {project.name}
+            </p>
+            <p className="truncate font-mono text-xs text-copy-muted">
+              {project.slug}
+            </p>
+          </div>
+          {showActions && (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    aria-label={`Project actions for ${project.name}`}
+                    size="icon-sm"
+                    variant="ghost"
+                  />
+                }
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                className="w-36 border border-surface-border bg-bg-elevated"
+              >
+                <DropdownMenuItem onClick={() => onRename(project)}>
+                  <Pencil className="h-4 w-4" />
+                  Rename
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => onDelete(project)}
+                  variant="destructive"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
+      ))}
+    </div>
   );
 };
 

@@ -10,13 +10,16 @@ import {
 } from "react";
 
 import { Navbar } from "@/components/editor/Navbar";
+import { ProjectDialogs } from "@/components/editor/ProjectDialogs";
 import { Sidebar } from "@/components/editor/Sidebar";
+import { useProjectDialogs } from "@/components/editor/useProjectDialogs";
 
 interface EditorShellProps {
   children: React.ReactNode;
 }
 
 interface EditorChromeContextValue {
+  openCreateProjectDialog: () => void;
   setProtectedChromeEnabled: Dispatch<SetStateAction<boolean>>;
 }
 
@@ -26,10 +29,14 @@ const EditorShell = ({ children }: EditorShellProps) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isProtectedChromeEnabled, setProtectedChromeEnabled] =
     useState(false);
+  const projectDialogs = useProjectDialogs();
 
   const contextValue = useMemo(
-    () => ({ setProtectedChromeEnabled }),
-    [setProtectedChromeEnabled]
+    () => ({
+      openCreateProjectDialog: projectDialogs.openCreateDialog,
+      setProtectedChromeEnabled,
+    }),
+    [projectDialogs.openCreateDialog, setProtectedChromeEnabled]
   );
 
   return (
@@ -41,11 +48,23 @@ const EditorShell = ({ children }: EditorShellProps) => {
           showSidebarToggle={isProtectedChromeEnabled}
         />
         {isProtectedChromeEnabled && (
-          <Sidebar
-            isOpen={isSidebarOpen}
-            onClose={() => setIsSidebarOpen(false)}
-          />
+          <>
+            {isSidebarOpen && (
+              <button
+                aria-label="Close sidebar"
+                className="fixed inset-0 z-20 bg-bg-base/70 backdrop-blur-sm md:hidden"
+                onClick={() => setIsSidebarOpen(false)}
+                type="button"
+              />
+            )}
+            <Sidebar
+              dialogs={projectDialogs}
+              isOpen={isSidebarOpen}
+              onClose={() => setIsSidebarOpen(false)}
+            />
+          </>
         )}
+        <ProjectDialogs dialogs={projectDialogs} />
         <main className="min-h-screen pt-16">{children}</main>
       </div>
     </EditorChromeContext.Provider>
