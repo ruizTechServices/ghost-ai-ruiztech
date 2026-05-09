@@ -116,8 +116,11 @@ The project uses `lib/utils.ts` for the shadcn `cn()` helper. Generated `compone
 ## Layout Patterns
 
 - Editor workspace: full-viewport layout — floating sidebar overlay on the left, center canvas, slide-over AI sidebar on the right.
-- Sidebars: floating overlay with dark semi-transparent background and subtle border.
+- Editor navbar: fixed `h-16` top bar with left, center, and right sections. It uses a dark token-based gradient, subtle bottom border, sidebar toggle, search, help, notifications, theme toggle control, and user profile dropdown.
+- Editor sidebar: floating left overlay above the canvas. Opening and closing it must not push page content; use transform-based slide-in motion from the left.
+- Sidebars: floating overlay with dark semi-transparent background, subtle border, and backdrop blur.
 - Modals and dialogs: centered overlay, `rounded-3xl`, dark background with backdrop blur.
+- Dialog pattern: use the existing shadcn dialog primitives for editor modals and popups. Compose dialogs with `DialogHeader`, `DialogTitle`, `DialogDescription`, and `DialogFooter` for title, description, and footer actions. Feature-specific forms or persistence should be added by the workflow that owns that behavior.
 - Navbar: top bar with dark background and bottom border.
 
 ## Icons
