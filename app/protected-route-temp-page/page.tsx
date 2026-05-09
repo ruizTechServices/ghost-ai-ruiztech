@@ -3,10 +3,10 @@ import { redirect } from "next/navigation";
 
 import { clerkAuthenticatedUrl, clerkSignInUrl } from "@/lib/auth/clerk-routes";
 
-const IndexPage = async () => {
+export default async function ProtectedRouteTempPage() {
   const { isAuthenticated } = await auth();
 
-  redirect(isAuthenticated ? clerkAuthenticatedUrl : clerkSignInUrl);
-};
+  if (!isAuthenticated) redirect(clerkSignInUrl);
 
-export default IndexPage;
+  redirect(clerkAuthenticatedUrl);
+}

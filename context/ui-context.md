@@ -116,12 +116,16 @@ The project uses `lib/utils.ts` for the shadcn `cn()` helper. Generated `compone
 ## Layout Patterns
 
 - Editor workspace: full-viewport layout — floating sidebar overlay on the left, center canvas, slide-over AI sidebar on the right.
+- Editor chrome is not mounted from the root public layout. Protected editor routes must render through `components/editor/EditorLayout.tsx`, which gates the editor navbar and sidebar behind Clerk authentication.
 - Editor navbar: fixed `h-16` top bar with left, center, and right sections. It uses a dark token-based gradient, subtle bottom border, sidebar toggle, search, help, notifications, theme toggle control, and user profile dropdown.
+- Editor navbar account controls use Clerk's official `UserButton` so profile, account switching, sign-out, security, connected accounts, preferences, and billing flows are handled by Clerk.
 - Editor sidebar: floating left overlay above the canvas. Opening and closing it must not push page content; use transform-based slide-in motion from the left.
 - Sidebars: floating overlay with dark semi-transparent background, subtle border, and backdrop blur.
 - Modals and dialogs: centered overlay, `rounded-3xl`, dark background with backdrop blur.
 - Dialog pattern: use the existing shadcn dialog primitives for editor modals and popups. Compose dialogs with `DialogHeader`, `DialogTitle`, `DialogDescription`, and `DialogFooter` for title, description, and footer actions. Feature-specific forms or persistence should be added by the workflow that owns that behavior.
 - Navbar: top bar with dark background and bottom border.
+- Auth pages use Clerk `SignIn` and `SignUp` components in a minimal two-panel large-screen layout: text-only product context on the left and the Clerk form on the right. Small screens show the form without the left panel.
+- Clerk appearance uses `@clerk/ui/themes` dark theme plus app CSS variables through `ClerkProvider`; do not hardcode Clerk colors in auth pages.
 
 ## Icons
 

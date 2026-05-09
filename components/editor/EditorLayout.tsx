@@ -1,27 +1,19 @@
-"use client";
+import { auth } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
 
-import { useState } from "react";
-
-import { Navbar } from "@/components/editor/Navbar";
-import { Sidebar } from "@/components/editor/Sidebar";
+import { EditorShell } from "@/components/editor/EditorShell";
+import { clerkSignInUrl } from "@/lib/auth/clerk-routes";
 
 interface EditorLayoutProps {
   children: React.ReactNode;
 }
 
-const EditorLayout = ({ children }: EditorLayoutProps) => {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+const EditorLayout = async ({ children }: EditorLayoutProps) => {
+  const { isAuthenticated } = await auth();
 
-  return (
-    <div className="min-h-screen bg-base text-copy-primary">
-      <Navbar
-        isSidebarOpen={isSidebarOpen}
-        onSidebarToggle={() => setIsSidebarOpen((current) => !current)}
-      />
-      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
-      <main className="min-h-screen pt-16">{children}</main>
-    </div>
-  );
+  if (!isAuthenticated) redirect(clerkSignInUrl);
+
+  return <EditorShell>{children}</EditorShell>;
 };
 
 export { EditorLayout };

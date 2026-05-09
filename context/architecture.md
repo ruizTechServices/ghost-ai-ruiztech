@@ -38,6 +38,11 @@ Supabase is the system of record for application data. Store relational records 
 - Every project has a single owner identified by Clerk user ID and stored in Supabase.
 - Projects can include additional collaborators stored in a Supabase join table.
 - Only authenticated users can access protected routes.
+- Editor chrome is protected by `components/editor/EditorLayout.tsx`, which performs a server-side Clerk auth check before rendering `Navbar`, `Sidebar`, or the editor shell.
+- `/` is an auth-state redirect entrypoint: signed-in users go to `/editor`, and signed-out users go to the Clerk sign-in route.
+- Clerk sign-out redirects directly to the configured sign-in URL instead of round-tripping through `/`.
+- `proxy.ts` protects all routes by default with Clerk `auth.protect()`, except `/`, the configured Clerk sign-in path, and the configured Clerk sign-up path.
+- Clerk route constants live in `lib/auth/clerk-routes.ts` and read Clerk's standard sign-in, sign-up, and fallback redirect environment variables with local path fallbacks.
 - Only the owner or a collaborator can mutate project resources.
 - API routes and background tasks must verify project membership against Supabase before any mutation.
 - Liveblocks room tokens are issued only after verifying project membership with Supabase data.
