@@ -46,3 +46,13 @@ next-env.d.ts
 
 # clerk configuration (can include secrets)
 /.clerk/
+
+# supabase configuration
+/.supabase/
+
+/supabase/
+
+/context/
+
+# Local project context files - never commit
+/context/
