@@ -1,36 +1,56 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Ghost AI RuizTech
+
+Ghost AI RuizTech is a Next.js App Router workspace for collaborative system design. Clerk handles authentication, while Supabase is the main database and persistence platform.
+
+## Core Stack
+
+- Next.js 16 and TypeScript for the application framework.
+- Clerk for authentication, user sessions, and protected routes.
+- Supabase Postgres for projects, collaborators, generated spec metadata, task runs, and artifact references.
+- Supabase Storage for canvas snapshots and generated Markdown specs.
+- Liveblocks and React Flow for real-time collaborative canvas editing.
+- Trigger.dev for durable AI generation workflows.
+
+## Supabase Role
+
+Supabase is the source of truth for application persistence.
+
+- Store relational records in Supabase Postgres.
+- Store generated files in Supabase Storage.
+- Store Clerk user IDs on Supabase rows for ownership and collaborator checks.
+- Use Supabase Row Level Security where client-side data access is required.
+- Do not add Prisma, Vercel Blob, Firebase, local JSON files, or another primary database/storage layer for application data.
+
+## Environment
+
+Create `.env.local` with Clerk and Supabase values:
+
+```env
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
+CLERK_SECRET_KEY=your_clerk_secret_key
+
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+```
+
+Use the service-role key only in server-only code paths.
 
 ## Getting Started
 
-First, run the development server:
+Install dependencies and run the development server:
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open `http://localhost:3000` in your browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Development Notes
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Keep Clerk as the auth provider.
+- Use Supabase Postgres for project data, access records, task records, and generated spec metadata.
+- Use Supabase Storage for canvas snapshots and generated Markdown specs.
+- Verify Supabase-backed project ownership before issuing Liveblocks room tokens or mutating project resources.
+- Follow the context files in `context/` before implementing new subsystems.
