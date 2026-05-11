@@ -12,10 +12,14 @@ import {
 import { Navbar } from "@/components/editor/Navbar";
 import { ProjectDialogs } from "@/components/editor/ProjectDialogs";
 import { Sidebar } from "@/components/editor/Sidebar";
-import { useProjectDialogs } from "@/components/editor/useProjectDialogs";
+import { useProjectActions } from "@/hooks/useProjectActions";
+import type { EditorProject } from "@/lib/editor/get-editor-projects";
 
 interface EditorShellProps {
+  activeProjectId?: string;
   children: React.ReactNode;
+  initialOwnedProjects: EditorProject[];
+  initialSharedProjects: EditorProject[];
 }
 
 interface EditorChromeContextValue {
@@ -25,18 +29,27 @@ interface EditorChromeContextValue {
 
 const EditorChromeContext = createContext<EditorChromeContextValue | null>(null);
 
-const EditorShell = ({ children }: EditorShellProps) => {
+const EditorShell = ({
+  activeProjectId,
+  children,
+  initialOwnedProjects,
+  initialSharedProjects,
+}: EditorShellProps) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isProtectedChromeEnabled, setProtectedChromeEnabled] =
     useState(false);
-  const projectDialogs = useProjectDialogs();
+  const projectActions = useProjectActions({
+    activeProjectId,
+    initialOwnedProjects,
+    initialSharedProjects,
+  });
 
   const contextValue = useMemo(
     () => ({
-      openCreateProjectDialog: projectDialogs.openCreateDialog,
+      openCreateProjectDialog: projectActions.openCreateDialog,
       setProtectedChromeEnabled,
     }),
-    [projectDialogs.openCreateDialog, setProtectedChromeEnabled]
+    [projectActions.openCreateDialog, setProtectedChromeEnabled]
   );
 
   return (
@@ -58,13 +71,14 @@ const EditorShell = ({ children }: EditorShellProps) => {
               />
             )}
             <Sidebar
-              dialogs={projectDialogs}
+              actions={projectActions}
+              currentRoomId={activeProjectId}
               isOpen={isSidebarOpen}
               onClose={() => setIsSidebarOpen(false)}
             />
           </>
         )}
-        <ProjectDialogs dialogs={projectDialogs} />
+        <ProjectDialogs actions={projectActions} />
         <main className="min-h-screen pt-16">{children}</main>
       </div>
     </EditorChromeContext.Provider>

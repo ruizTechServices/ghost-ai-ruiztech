@@ -40,15 +40,7 @@ export interface Database {
           status?: Database["public"]["Enums"]["project_status"];
           updated_at?: string;
         };
-        Relationships: [
-          {
-            foreignKeyName: "projects_owner_id_fkey";
-            columns: ["owner_id"];
-            isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["id"];
-          },
-        ];
+        Relationships: [];
       };
       project_collaborators: {
         Row: {
