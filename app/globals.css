@@ -84,6 +84,9 @@
     --accent-primary-dim: rgba(0, 200, 212, 0.12);
     --accent-ai: #6457f9;
     --accent-ai-text: #8b82ff;
+    --canvas-edge: #f8fafc;
+    --canvas-edge-rest: rgba(248, 250, 252, 0.44);
+    --canvas-edge-active: rgba(248, 250, 252, 0.92);
     --state-error: #ff4d4f;
     --state-success: #34d399;
     --state-warning: #fbbf24;

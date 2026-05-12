@@ -1,13 +1,26 @@
 "use client";
 
-import { PanelRightClose, PanelRightOpen, Share2 } from "lucide-react";
+import {
+  House,
+  LayoutTemplate,
+  PanelRightClose,
+  PanelRightOpen,
+  Share2,
+} from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 
 import { Canvas } from "@/components/editor/canvas/Canvas";
 import { ProjectDialogs } from "@/components/editor/ProjectDialogs";
 import { ProjectSidebar } from "@/components/editor/ProjectSidebar";
 import { ShareDialog } from "@/components/editor/ShareDialog";
-import { Button } from "@/components/ui/button";
+import { StarterTemplatesModal } from "@/components/editor/starter-templates-modal";
+import {
+  CANVAS_TEMPLATES,
+  type CanvasTemplate,
+  type CanvasTemplateImportRequest,
+} from "@/components/editor/starter-templates";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Tooltip,
   TooltipContent,
@@ -32,26 +45,57 @@ const WorkspaceShell = ({
 }: WorkspaceShellProps) => {
   const [isAiSidebarOpen, setIsAiSidebarOpen] = useState(true);
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
+  const [isTemplatesModalOpen, setIsTemplatesModalOpen] = useState(false);
+  const [templateImportRequest, setTemplateImportRequest] =
+    useState<CanvasTemplateImportRequest | null>(null);
   const projectActions = useProjectActions({
     activeProjectId: roomId,
     initialOwnedProjects: ownedProjects,
     initialSharedProjects: sharedProjects,
   });
   const AiSidebarIcon = isAiSidebarOpen ? PanelRightClose : PanelRightOpen;
+  const handleTemplateImport = (template: CanvasTemplate): void => {
+    setTemplateImportRequest((current) => ({
+      id: (current?.id ?? 0) + 1,
+      template,
+    }));
+  };
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-base text-copy-primary">
       <header className="flex h-16 shrink-0 items-center justify-between border-b border-surface-border bg-bg-surface px-4">
-        <div className="min-w-0">
-          <h1 className="truncate text-sm font-semibold tracking-normal text-copy-primary">
-            {project.name}
-          </h1>
-          <p className="truncate font-mono text-xs text-copy-muted">
-            {roomId}
-          </p>
+        <div className="flex min-w-0 items-center gap-3">
+          <Link
+            aria-label="Go to project home"
+            className={cn(
+              buttonVariants({ size: "default", variant: "outline" }),
+              "rounded-xl border-surface-border bg-bg-subtle/70 text-copy-primary hover:bg-bg-elevated",
+            )}
+            href="/editor"
+          >
+            <House className="h-4 w-4" />
+            <span className="hidden sm:inline">Home</span>
+          </Link>
+
+          <div className="min-w-0">
+            <h1 className="truncate text-sm font-semibold tracking-normal text-copy-primary">
+              {project.name}
+            </h1>
+            <p className="truncate font-mono text-xs text-copy-muted">
+              {roomId}
+            </p>
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
+          <Button
+            className="rounded-xl"
+            onClick={() => setIsTemplatesModalOpen(true)}
+            variant="outline"
+          >
+            <LayoutTemplate className="h-4 w-4" />
+            Templates
+          </Button>
           <Button
             className="rounded-xl"
             onClick={() => setIsShareDialogOpen(true)}
@@ -94,7 +138,10 @@ const WorkspaceShell = ({
 
         <main className="flex min-w-0 flex-1 bg-base">
           <div className="min-h-0 flex-1 bg-bg-base">
-            <Canvas roomId={roomId} />
+            <Canvas
+              roomId={roomId}
+              templateImportRequest={templateImportRequest}
+            />
           </div>
 
           <aside
@@ -127,6 +174,12 @@ const WorkspaceShell = ({
         open={isShareDialogOpen}
         projectName={project.name}
         roomId={roomId}
+      />
+      <StarterTemplatesModal
+        onImport={handleTemplateImport}
+        onOpenChange={setIsTemplatesModalOpen}
+        open={isTemplatesModalOpen}
+        templates={CANVAS_TEMPLATES}
       />
     </div>
   );

@@ -8,9 +8,11 @@ import {
 
 import { CanvasErrorBoundary } from "@/components/editor/canvas/CanvasErrorBoundary";
 import { FlowCanvas } from "@/components/editor/canvas/FlowCanvas";
+import type { CanvasTemplateImportRequest } from "@/components/editor/starter-templates";
 
 interface CanvasProps {
   roomId: string;
+  templateImportRequest?: CanvasTemplateImportRequest | null;
 }
 
 const CanvasLoading = () => (
@@ -19,7 +21,7 @@ const CanvasLoading = () => (
   </div>
 );
 
-const Canvas = ({ roomId }: CanvasProps) => {
+const Canvas = ({ roomId, templateImportRequest }: CanvasProps) => {
   return (
     <CanvasErrorBoundary>
       <LiveblocksProvider authEndpoint="/api/liveblocks-auth">
@@ -28,7 +30,7 @@ const Canvas = ({ roomId }: CanvasProps) => {
           initialPresence={{ cursor: null, isThinking: false }}
         >
           <ClientSideSuspense fallback={<CanvasLoading />}>
-            <FlowCanvas />
+            <FlowCanvas templateImportRequest={templateImportRequest} />
           </ClientSideSuspense>
         </RoomProvider>
       </LiveblocksProvider>

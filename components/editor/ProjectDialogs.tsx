@@ -35,11 +35,11 @@ const ProjectDialogs = ({ actions }: ProjectDialogsProps) => {
   return (
     <>
       <Dialog open={isCreateOpen} onOpenChange={actions.closeDialog}>
-        <DialogContent className="rounded-3xl border border-surface-border bg-bg-elevated">
+        <DialogContent className="rounded-3xl border border-surface-border bg-bg-elevated text-copy-primary">
           <form onSubmit={handleCreateSubmit}>
             <DialogHeader>
-              <DialogTitle>Create Project</DialogTitle>
-              <DialogDescription>
+              <DialogTitle className="text-copy-primary">Create Project</DialogTitle>
+              <DialogDescription className="text-copy-muted">
                 Name the workspace and create its Liveblocks room ID.
               </DialogDescription>
             </DialogHeader>
@@ -48,7 +48,7 @@ const ProjectDialogs = ({ actions }: ProjectDialogsProps) => {
                 Project name
                 <Input
                   autoFocus
-                  className="mt-2 h-10 rounded-xl border-surface-border bg-bg-subtle/70"
+                  className="mt-2 h-10 rounded-xl border-surface-border bg-bg-subtle/70 text-copy-primary placeholder:text-copy-muted"
                   onChange={(event) => actions.setProjectName(event.target.value)}
                   placeholder="System architecture"
                   value={actions.projectName}
@@ -67,7 +67,7 @@ const ProjectDialogs = ({ actions }: ProjectDialogsProps) => {
               <DialogClose render={<Button type="button" variant="outline" />}>
                 Close
               </DialogClose>
-              <Button disabled={actions.isLoading}>
+              <Button disabled={actions.isLoading} type="submit">
                 {actions.isLoading ? "Creating..." : "Create project"}
               </Button>
             </DialogFooter>
@@ -76,11 +76,11 @@ const ProjectDialogs = ({ actions }: ProjectDialogsProps) => {
       </Dialog>
 
       <Dialog open={isRenameOpen} onOpenChange={actions.closeDialog}>
-        <DialogContent className="rounded-3xl border border-surface-border bg-bg-elevated">
+        <DialogContent className="rounded-3xl border border-surface-border bg-bg-elevated text-copy-primary">
           <form onSubmit={handleRenameSubmit}>
             <DialogHeader>
-              <DialogTitle>Rename Project</DialogTitle>
-              <DialogDescription>
+              <DialogTitle className="text-copy-primary">Rename Project</DialogTitle>
+              <DialogDescription className="text-copy-muted">
                 Current project: {actions.selectedProject?.name ?? "Unknown project"}
               </DialogDescription>
             </DialogHeader>
@@ -89,7 +89,7 @@ const ProjectDialogs = ({ actions }: ProjectDialogsProps) => {
                 Project name
                 <Input
                   autoFocus
-                  className="mt-2 h-10 rounded-xl border-surface-border bg-bg-subtle/70"
+                  className="mt-2 h-10 rounded-xl border-surface-border bg-bg-subtle/70 text-copy-primary placeholder:text-copy-muted"
                   onChange={(event) => actions.setProjectName(event.target.value)}
                   value={actions.projectName}
                 />
@@ -101,7 +101,10 @@ const ProjectDialogs = ({ actions }: ProjectDialogsProps) => {
               <DialogClose render={<Button type="button" variant="outline" />}>
                 Close
               </DialogClose>
-              <Button disabled={!actions.projectName.trim() || actions.isLoading}>
+              <Button
+                disabled={!actions.projectName.trim() || actions.isLoading}
+                type="submit"
+              >
                 {actions.isLoading ? "Saving..." : "Rename project"}
               </Button>
             </DialogFooter>
@@ -110,10 +113,10 @@ const ProjectDialogs = ({ actions }: ProjectDialogsProps) => {
       </Dialog>
 
       <Dialog open={isDeleteOpen} onOpenChange={actions.closeDialog}>
-        <DialogContent className="rounded-3xl border border-surface-border bg-bg-elevated">
+        <DialogContent className="rounded-3xl border border-surface-border bg-bg-elevated text-copy-primary">
           <DialogHeader>
-            <DialogTitle>Delete Project</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-copy-primary">Delete Project</DialogTitle>
+            <DialogDescription className="text-copy-muted">
               Delete {actions.selectedProject?.name ?? "this project"} from your
               project library.
             </DialogDescription>
