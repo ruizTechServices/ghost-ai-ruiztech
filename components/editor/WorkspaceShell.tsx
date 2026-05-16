@@ -1,8 +1,12 @@
 "use client";
 
 import {
+  AlertCircle,
+  CheckCircle2,
+  Cloud,
   House,
   LayoutTemplate,
+  LoaderCircle,
   PanelRightClose,
   PanelRightOpen,
   Share2,
@@ -10,6 +14,7 @@ import {
 import Link from "next/link";
 import { useState } from "react";
 
+import { AiWorkspaceSidebar } from "@/components/editor/AiWorkspaceSidebar";
 import { Canvas } from "@/components/editor/canvas/Canvas";
 import { ProjectDialogs } from "@/components/editor/ProjectDialogs";
 import { ProjectSidebar } from "@/components/editor/ProjectSidebar";
@@ -26,6 +31,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import type { CanvasAutosaveState } from "@/hooks/useCanvasAutosave";
 import { useProjectActions } from "@/hooks/useProjectActions";
 import type { EditorProject } from "@/lib/editor/get-editor-projects";
 import { cn } from "@/lib/utils";
@@ -37,6 +43,48 @@ interface WorkspaceShellProps {
   sharedProjects: EditorProject[];
 }
 
+const getSaveStatusLabel = ({
+  lastSavedAt,
+  status,
+}: CanvasAutosaveState): string => {
+  if (status === "saving") return "Saving";
+  if (status === "error") return "Save error";
+  if (status === "saved" && lastSavedAt) {
+    return `Saved ${lastSavedAt.toLocaleTimeString([], {
+      hour: "numeric",
+      minute: "2-digit",
+    })}`;
+  }
+
+  return "Autosave ready";
+};
+
+const CanvasSaveStatusIndicator = ({ state }: { state: CanvasAutosaveState }) => {
+  const Icon =
+    state.status === "saving"
+      ? LoaderCircle
+      : state.status === "saved"
+        ? CheckCircle2
+        : state.status === "error"
+          ? AlertCircle
+          : Cloud;
+
+  return (
+    <div
+      className={cn(
+        "hidden h-8 items-center gap-1.5 rounded-xl border border-surface-border bg-bg-subtle/70 px-2.5 text-xs font-medium text-copy-muted md:flex",
+        state.status === "saved" && "text-state-success",
+        state.status === "error" && "text-state-error",
+      )}
+    >
+      <Icon
+        className={cn("h-4 w-4", state.status === "saving" && "animate-spin")}
+      />
+      <span>{getSaveStatusLabel(state)}</span>
+    </div>
+  );
+};
+
 const WorkspaceShell = ({
   ownedProjects,
   project,
@@ -44,6 +92,10 @@ const WorkspaceShell = ({
   sharedProjects,
 }: WorkspaceShellProps) => {
   const [isAiSidebarOpen, setIsAiSidebarOpen] = useState(true);
+  const [canvasSaveState, setCanvasSaveState] = useState<CanvasAutosaveState>({
+    lastSavedAt: null,
+    status: "idle",
+  });
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const [isTemplatesModalOpen, setIsTemplatesModalOpen] = useState(false);
   const [templateImportRequest, setTemplateImportRequest] =
@@ -88,6 +140,7 @@ const WorkspaceShell = ({
         </div>
 
         <div className="flex items-center gap-2">
+          <CanvasSaveStatusIndicator state={canvasSaveState} />
           <Button
             className="rounded-xl"
             onClick={() => setIsTemplatesModalOpen(true)}
@@ -139,31 +192,17 @@ const WorkspaceShell = ({
         <main className="flex min-w-0 flex-1 bg-base">
           <div className="min-h-0 flex-1 bg-bg-base">
             <Canvas
+              key={roomId}
+              onSaveStatusChange={setCanvasSaveState}
               roomId={roomId}
               templateImportRequest={templateImportRequest}
             />
           </div>
 
-          <aside
-            className={cn(
-              "hidden w-80 shrink-0 border-l border-surface-border bg-bg-surface transition-[width] duration-200 lg:block",
-              !isAiSidebarOpen && "w-0 overflow-hidden border-l-0",
-            )}
-          >
-            <div className="flex h-full flex-col p-4">
-              <div>
-                <h2 className="text-base font-semibold tracking-normal text-copy-primary">
-                  AI Assistant
-                </h2>
-                <p className="mt-1 text-xs leading-5 text-copy-muted">
-                  Future generation chat and project context will appear here.
-                </p>
-              </div>
-              <div className="mt-5 flex flex-1 items-center justify-center rounded-2xl border border-dashed border-surface-border bg-bg-subtle/40 px-4 text-center text-sm text-copy-muted">
-                AI chat placeholder
-              </div>
-            </div>
-          </aside>
+          <AiWorkspaceSidebar
+            isOpen={isAiSidebarOpen}
+            onOpenChange={setIsAiSidebarOpen}
+          />
         </main>
       </div>
 

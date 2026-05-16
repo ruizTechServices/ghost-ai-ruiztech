@@ -1,6 +1,8 @@
 "use client";
 
+import { useAuth } from "@clerk/nextjs";
 import { useLiveblocksFlow } from "@liveblocks/react-flow";
+import { useUpdateMyPresence } from "@liveblocks/react/suspense";
 import {
   Background,
   BackgroundVariant,
@@ -14,15 +16,32 @@ import {
   type EdgeChange,
   type NodeChange,
 } from "@xyflow/react";
-import { useCallback, useEffect, useRef, type DragEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type DragEvent,
+  type MouseEvent,
+} from "react";
 
 import "@xyflow/react/dist/style.css";
 
 import { CanvasControlBar } from "@/components/editor/canvas/CanvasControlBar";
 import { CanvasEdgeView } from "@/components/editor/canvas/CanvasEdgeView";
 import { CanvasNodeView } from "@/components/editor/canvas/CanvasNodeView";
+import { CanvasPresence } from "@/components/editor/canvas/CanvasPresence";
+import { LiveCursors } from "@/components/editor/canvas/LiveCursors";
 import { ShapePanel } from "@/components/editor/canvas/ShapePanel";
 import type { CanvasTemplateImportRequest } from "@/components/editor/starter-templates";
+import {
+  parseCanvasSnapshot,
+  type CanvasSnapshot,
+} from "@/lib/canvas-snapshot";
+import {
+  useCanvasAutosave,
+  type CanvasAutosaveState,
+} from "@/hooks/useCanvasAutosave";
 import {
   DEFAULT_NODE_COLOR,
   DEFAULT_NODE_TEXT_COLOR,
@@ -108,20 +127,75 @@ const cloneTemplateEdge = (edge: CanvasEdge): CanvasEdge => ({
   style: edge.style ? { ...edge.style } : undefined,
 });
 
+const readCanvasLoadResponse = async (
+  response: Response,
+): Promise<CanvasSnapshot | null> => {
+  if (!response.ok) {
+    throw new Error("Canvas snapshot load failed.");
+  }
+
+  const parsed: unknown = await response.json();
+  if (
+    typeof parsed !== "object" ||
+    parsed === null ||
+    !("canvas" in parsed)
+  ) {
+    throw new Error("Canvas snapshot response is malformed.");
+  }
+
+  const { canvas } = parsed;
+  return canvas === null ? null : parseCanvasSnapshot(canvas);
+};
+
 interface CanvasFlowProps {
+  onSaveStatusChange?: (state: CanvasAutosaveState) => void;
+  projectId: string;
   templateImportRequest?: CanvasTemplateImportRequest | null;
 }
 
-const CanvasFlow = ({ templateImportRequest }: CanvasFlowProps) => {
+const CanvasFlow = ({
+  onSaveStatusChange,
+  projectId,
+  templateImportRequest,
+}: CanvasFlowProps) => {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const importedRequestIdRef = useRef<number | null>(null);
+  const initialLoadStartedRef = useRef(false);
+  const currentContentRef = useRef({ edgeCount: 0, nodeCount: 0 });
+  const { userId } = useAuth();
   const reactFlow = useReactFlow<CanvasNode, CanvasEdge>();
+  const updateMyPresence = useUpdateMyPresence();
+  const [hasInitialLoadError, setHasInitialLoadError] = useState(false);
+  const [isInitialLoadComplete, setIsInitialLoadComplete] = useState(false);
   const { edges, nodes, onDelete, onEdgesChange, onNodesChange } =
     useLiveblocksFlow<CanvasNode, CanvasEdge>({
       edges: { initial: INITIAL_EDGES },
       nodes: { initial: INITIAL_NODES },
       suspense: true,
     });
+  const autosaveState = useCanvasAutosave({
+    edges,
+    isReady: isInitialLoadComplete && !hasInitialLoadError,
+    nodes,
+    projectId,
+  });
+
+  useEffect(() => {
+    currentContentRef.current = {
+      edgeCount: edges.length,
+      nodeCount: nodes.length,
+    };
+  }, [edges.length, nodes.length]);
+
+  useEffect(() => {
+    if (!onSaveStatusChange) return;
+
+    onSaveStatusChange(
+      hasInitialLoadError
+        ? { lastSavedAt: null, status: "error" }
+        : autosaveState,
+    );
+  }, [autosaveState, hasInitialLoadError, onSaveStatusChange]);
 
   const handleDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -160,6 +234,25 @@ const CanvasFlow = ({ templateImportRequest }: CanvasFlowProps) => {
     [onNodesChange, reactFlow],
   );
 
+  const handleMouseMove = useCallback(
+    (event: MouseEvent<HTMLDivElement>) => {
+      const bounds = wrapperRef.current?.getBoundingClientRect();
+      if (!bounds) return;
+
+      updateMyPresence({
+        cursor: {
+          x: event.clientX - bounds.left,
+          y: event.clientY - bounds.top,
+        },
+      });
+    },
+    [updateMyPresence],
+  );
+
+  const handleMouseLeave = useCallback(() => {
+    updateMyPresence({ cursor: null });
+  }, [updateMyPresence]);
+
   const handleConnect = useCallback(
     (connection: Connection): void => {
       if (!connection.source || !connection.target) return;
@@ -181,6 +274,76 @@ const CanvasFlow = ({ templateImportRequest }: CanvasFlowProps) => {
     },
     [onEdgesChange],
   );
+
+  useEffect(() => {
+    if (initialLoadStartedRef.current) return;
+
+    initialLoadStartedRef.current = true;
+
+    if (nodes.length > 0 || edges.length > 0) {
+      window.setTimeout(() => setIsInitialLoadComplete(true), 0);
+      return;
+    }
+
+    let isCancelled = false;
+
+    void fetch(`/api/projects/${encodeURIComponent(projectId)}/canvas`)
+      .then(readCanvasLoadResponse)
+      .then((canvas) => {
+        if (isCancelled) return;
+
+        const roomHasContent =
+          currentContentRef.current.nodeCount > 0 ||
+          currentContentRef.current.edgeCount > 0;
+
+        if (roomHasContent || !canvas) {
+          setIsInitialLoadComplete(true);
+          return;
+        }
+
+        if (canvas.nodes.length > 0) {
+          onNodesChange(
+            canvas.nodes.map((node) => ({
+              item: cloneTemplateNode(node),
+              type: "add",
+            })),
+          );
+        }
+
+        if (canvas.edges.length > 0) {
+          onEdgesChange(
+            canvas.edges.map((edge) => ({
+              item: cloneTemplateEdge(edge),
+              type: "add",
+            })),
+          );
+        }
+
+        window.requestAnimationFrame(() => {
+          void reactFlow.fitView({
+            duration: 240,
+            padding: 0.2,
+          });
+          window.setTimeout(() => setIsInitialLoadComplete(true), 0);
+        });
+      })
+      .catch(() => {
+        if (isCancelled) return;
+
+        setHasInitialLoadError(true);
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [
+    edges.length,
+    nodes.length,
+    onEdgesChange,
+    onNodesChange,
+    projectId,
+    reactFlow,
+  ]);
 
   useEffect(() => {
     if (!templateImportRequest) return;
@@ -258,10 +421,14 @@ const CanvasFlow = ({ templateImportRequest }: CanvasFlowProps) => {
         onConnect={handleConnect}
         onDelete={onDelete}
         onEdgesChange={onEdgesChange}
+        onMouseLeave={handleMouseLeave}
+        onMouseMove={handleMouseMove}
         onNodesChange={onNodesChange}
       >
         <Background gap={24} size={1.5} variant={BackgroundVariant.Dots} />
       </ReactFlow>
+      <LiveCursors currentUserId={userId} />
+      <CanvasPresence />
       <CanvasControlBar />
       <ShapePanel />
     </div>
@@ -269,12 +436,22 @@ const CanvasFlow = ({ templateImportRequest }: CanvasFlowProps) => {
 };
 
 interface FlowCanvasProps {
+  onSaveStatusChange?: (state: CanvasAutosaveState) => void;
+  projectId: string;
   templateImportRequest?: CanvasTemplateImportRequest | null;
 }
 
-const FlowCanvas = ({ templateImportRequest }: FlowCanvasProps) => (
+const FlowCanvas = ({
+  onSaveStatusChange,
+  projectId,
+  templateImportRequest,
+}: FlowCanvasProps) => (
   <ReactFlowProvider>
-    <CanvasFlow templateImportRequest={templateImportRequest} />
+    <CanvasFlow
+      onSaveStatusChange={onSaveStatusChange}
+      projectId={projectId}
+      templateImportRequest={templateImportRequest}
+    />
   </ReactFlowProvider>
 );
 

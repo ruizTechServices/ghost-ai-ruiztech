@@ -9,8 +9,10 @@ import {
 import { CanvasErrorBoundary } from "@/components/editor/canvas/CanvasErrorBoundary";
 import { FlowCanvas } from "@/components/editor/canvas/FlowCanvas";
 import type { CanvasTemplateImportRequest } from "@/components/editor/starter-templates";
+import type { CanvasAutosaveState } from "@/hooks/useCanvasAutosave";
 
 interface CanvasProps {
+  onSaveStatusChange?: (state: CanvasAutosaveState) => void;
   roomId: string;
   templateImportRequest?: CanvasTemplateImportRequest | null;
 }
@@ -21,16 +23,24 @@ const CanvasLoading = () => (
   </div>
 );
 
-const Canvas = ({ roomId, templateImportRequest }: CanvasProps) => {
+const Canvas = ({
+  onSaveStatusChange,
+  roomId,
+  templateImportRequest,
+}: CanvasProps) => {
   return (
     <CanvasErrorBoundary>
       <LiveblocksProvider authEndpoint="/api/liveblocks-auth">
         <RoomProvider
           id={roomId}
-          initialPresence={{ cursor: null, isThinking: false }}
+          initialPresence={{ cursor: null, thinking: false }}
         >
           <ClientSideSuspense fallback={<CanvasLoading />}>
-            <FlowCanvas templateImportRequest={templateImportRequest} />
+            <FlowCanvas
+              onSaveStatusChange={onSaveStatusChange}
+              projectId={roomId}
+              templateImportRequest={templateImportRequest}
+            />
           </ClientSideSuspense>
         </RoomProvider>
       </LiveblocksProvider>
