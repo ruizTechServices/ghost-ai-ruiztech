@@ -23,7 +23,7 @@ Supabase is the source of truth for application persistence.
 
 ## Environment
 
-Create `.env.local` with Clerk and Supabase values:
+Create `.env.local` with Clerk, Supabase, Liveblocks, OpenAI, and Trigger.dev values:
 
 ```env
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
@@ -32,9 +32,15 @@ CLERK_SECRET_KEY=your_clerk_secret_key
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your_supabase_publishable_key
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+
+LIVEBLOCKS_SECRET_KEY=your_liveblocks_secret_key
+
+OPENAI_API_KEY=your_openai_api_key
+
+TRIGGER_SECRET_KEY=your_trigger_secret_key
 ```
 
-Use the service-role key only in server-only code paths.
+Use service-role, OpenAI, and Trigger secret keys only in server-only code paths.
 
 ## Getting Started
 
@@ -53,4 +59,6 @@ Open `http://localhost:3000` in your browser.
 - Use Supabase Postgres for project data, access records, task records, and generated spec metadata.
 - Use Supabase Storage for canvas snapshots and generated Markdown specs.
 - Verify Supabase-backed project ownership before issuing Liveblocks room tokens or mutating project resources.
+- Trigger design-generation work through `POST /api/ai/design` and issue short-lived run-scoped realtime tokens through `POST /api/ai/design/token`.
+- OpenAI API access is centralized under `lib/openai` and must stay server-only.
 - Follow the context files in `context/` before implementing new subsystems.

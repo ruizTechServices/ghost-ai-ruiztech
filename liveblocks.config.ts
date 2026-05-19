@@ -1,3 +1,5 @@
+import type { AiStatusEvent } from "@/types/ai-design";
+
 declare global {
   interface Liveblocks {
     Presence: {
@@ -16,7 +18,7 @@ declare global {
       };
     };
 
-    RoomEvent: Record<string, never>;
+    RoomEvent: AiStatusEvent;
 
     ThreadMetadata: Record<string, never>;
 

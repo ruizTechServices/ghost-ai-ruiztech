@@ -35,6 +35,7 @@ import type { CanvasAutosaveState } from "@/hooks/useCanvasAutosave";
 import { useProjectActions } from "@/hooks/useProjectActions";
 import type { EditorProject } from "@/lib/editor/get-editor-projects";
 import { cn } from "@/lib/utils";
+import type { AiStatusEvent } from "@/types/ai-design";
 
 interface WorkspaceShellProps {
   ownedProjects: EditorProject[];
@@ -92,6 +93,7 @@ const WorkspaceShell = ({
   sharedProjects,
 }: WorkspaceShellProps) => {
   const [isAiSidebarOpen, setIsAiSidebarOpen] = useState(true);
+  const [aiStatusEvents, setAiStatusEvents] = useState<AiStatusEvent[]>([]);
   const [canvasSaveState, setCanvasSaveState] = useState<CanvasAutosaveState>({
     lastSavedAt: null,
     status: "idle",
@@ -106,6 +108,17 @@ const WorkspaceShell = ({
     initialSharedProjects: sharedProjects,
   });
   const AiSidebarIcon = isAiSidebarOpen ? PanelRightClose : PanelRightOpen;
+
+  const handleAiStatusEvent = (event: AiStatusEvent): void => {
+    setAiStatusEvents((current) => {
+      if (current.some((statusEvent) => statusEvent.id === event.id)) {
+        return current;
+      }
+
+      return [...current, event].slice(-80);
+    });
+  };
+
   const handleTemplateImport = (template: CanvasTemplate): void => {
     setTemplateImportRequest((current) => ({
       id: (current?.id ?? 0) + 1,
@@ -193,6 +206,7 @@ const WorkspaceShell = ({
           <div className="min-h-0 flex-1 bg-bg-base">
             <Canvas
               key={roomId}
+              onAiStatusEvent={handleAiStatusEvent}
               onSaveStatusChange={setCanvasSaveState}
               roomId={roomId}
               templateImportRequest={templateImportRequest}
@@ -202,6 +216,10 @@ const WorkspaceShell = ({
           <AiWorkspaceSidebar
             isOpen={isAiSidebarOpen}
             onOpenChange={setIsAiSidebarOpen}
+            roomId={roomId}
+            statusEvents={aiStatusEvents.filter(
+              (statusEvent) => statusEvent.roomId === roomId,
+            )}
           />
         </main>
       </div>

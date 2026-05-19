@@ -1,14 +1,14 @@
 import "server-only";
 
 import {
-  checkProjectAccess,
-  type ClerkIdentity,
-} from "@/lib/project-access";
-import {
   parseCanvasSnapshot,
   type CanvasSnapshot,
 } from "@/lib/canvas-snapshot";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import {
+  checkProjectMembership,
+  type ProjectMembershipIdentity,
+} from "@/lib/supabase/project-membership";
 
 const CANVAS_SNAPSHOT_BUCKET = "project-artifacts";
 
@@ -26,12 +26,12 @@ const ensureCanvasAccess = async ({
   identity,
   projectId,
 }: {
-  identity: ClerkIdentity;
+  identity: ProjectMembershipIdentity;
   projectId: string;
 }) => {
-  const { access, project } = await checkProjectAccess({
+  const { access, project } = await checkProjectMembership({
     ...identity,
-    roomId: projectId,
+    projectId,
   });
 
   if (!access || !project) {
@@ -47,7 +47,7 @@ const saveCanvasSnapshot = async ({
   projectId,
 }: {
   canvas: CanvasSnapshot;
-  identity: ClerkIdentity;
+  identity: ProjectMembershipIdentity;
   projectId: string;
 }): Promise<{ path: string }> => {
   await ensureCanvasAccess({ identity, projectId });
@@ -77,7 +77,7 @@ const loadCanvasSnapshot = async ({
   identity,
   projectId,
 }: {
-  identity: ClerkIdentity;
+  identity: ProjectMembershipIdentity;
   projectId: string;
 }): Promise<{ canvas: CanvasSnapshot | null; path: string | null }> => {
   const project = await ensureCanvasAccess({ identity, projectId });

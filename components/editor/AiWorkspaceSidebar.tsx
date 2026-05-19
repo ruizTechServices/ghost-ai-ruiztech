@@ -1,8 +1,17 @@
 "use client";
 
-import { Bot, Download, FileText, Send, Sparkles, X } from "lucide-react";
+import {
+  Bot,
+  Download,
+  FileText,
+  LoaderCircle,
+  Send,
+  Sparkles,
+  X,
+} from "lucide-react";
 import {
   useEffect,
+  useMemo,
   useRef,
   useState,
   type FormEvent,
@@ -18,6 +27,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import type { AiStatusEvent } from "@/types/ai-design";
 
 const STARTER_PROMPTS = [
   "Design an e-commerce backend",
@@ -26,23 +36,45 @@ const STARTER_PROMPTS = [
 ] as const;
 
 interface ChatMessage {
+  createdAt: string;
   content: string;
-  id: number;
+  id: string;
   role: "assistant" | "user";
 }
 
 interface AiWorkspaceSidebarProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
+  roomId: string;
+  statusEvents: AiStatusEvent[];
 }
 
 const AiWorkspaceSidebar = ({
   isOpen,
   onOpenChange,
+  roomId,
+  statusEvents,
 }: AiWorkspaceSidebarProps) => {
   const [input, setInput] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const visibleMessages = useMemo<ChatMessage[]>(() => {
+    const statusMessages = statusEvents.map(
+      (event): ChatMessage => ({
+        content: event.message,
+        createdAt: event.createdAt,
+        id: event.id,
+        role: "assistant",
+      }),
+    );
+
+    return [...messages, ...statusMessages].sort(
+      (first, second) =>
+        new Date(first.createdAt).getTime() -
+        new Date(second.createdAt).getTime(),
+    );
+  }, [messages, statusEvents]);
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -52,27 +84,73 @@ const AiWorkspaceSidebar = ({
     textarea.style.height = `${Math.min(textarea.scrollHeight, 160)}px`;
   }, [input]);
 
-  const handleSubmit = (event?: FormEvent<HTMLFormElement>): void => {
+  const handleSubmit = async (
+    event?: FormEvent<HTMLFormElement>,
+  ): Promise<void> => {
     event?.preventDefault();
 
     const trimmedInput = input.trim();
-    if (!trimmedInput) return;
+    if (!trimmedInput || isSubmitting) return;
 
+    const createdAt = new Date().toISOString();
     setMessages((current) => [
       ...current,
       {
+        createdAt,
         content: trimmedInput,
-        id: Date.now(),
+        id: `user-${Date.now()}`,
         role: "user",
       },
       {
-        content:
-          "Ghost AI is ready to use this prompt when generation is connected.",
-        id: Date.now() + 1,
+        createdAt,
+        content: "Starting Ghost AI on this canvas.",
+        id: `assistant-starting-${Date.now()}`,
         role: "assistant",
       },
     ]);
     setInput("");
+    setIsSubmitting(true);
+
+    try {
+      const response = await fetch("/api/ai/design", {
+        body: JSON.stringify({
+          projectId: roomId,
+          prompt: trimmedInput,
+          roomId,
+        }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        const errorBody = (await response.json().catch(() => null)) as {
+          error?: { message?: string };
+        } | null;
+
+        throw new Error(
+          errorBody?.error?.message ?? "Failed to start design generation.",
+        );
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Failed to start design generation.";
+
+      setMessages((current) => [
+        ...current,
+        {
+          content: message,
+          createdAt: new Date().toISOString(),
+          id: `assistant-error-${Date.now()}`,
+          role: "assistant",
+        },
+      ]);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleInputKeyDown = (
@@ -81,7 +159,7 @@ const AiWorkspaceSidebar = ({
     if (event.key !== "Enter" || event.shiftKey) return;
 
     event.preventDefault();
-    handleSubmit();
+    void handleSubmit();
   };
 
   return (
@@ -145,7 +223,7 @@ const AiWorkspaceSidebar = ({
             value="architect"
           >
             <div className="min-h-0 flex-1 overflow-y-auto rounded-2xl border border-surface-border bg-bg-surface/60 p-3">
-              {messages.length === 0 ? (
+              {visibleMessages.length === 0 ? (
                 <div className="flex h-full min-h-80 flex-col items-center justify-center gap-4 text-center">
                   <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-surface-border bg-bg-subtle text-accent-text">
                     <Bot className="h-8 w-8" />
@@ -174,7 +252,7 @@ const AiWorkspaceSidebar = ({
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {messages.map((message) => (
+                  {visibleMessages.map((message) => (
                     <div
                       className={cn(
                         "max-w-[86%] rounded-2xl px-3 py-2 text-sm leading-5",
@@ -194,6 +272,7 @@ const AiWorkspaceSidebar = ({
             <form className="mt-3 space-y-2" onSubmit={handleSubmit}>
               <Textarea
                 className="max-h-40 min-h-[72px] resize-none rounded-2xl border-surface-border bg-bg-subtle/70 text-sm text-copy-primary placeholder:text-muted-text"
+                disabled={isSubmitting}
                 onChange={(event) => setInput(event.target.value)}
                 onKeyDown={handleInputKeyDown}
                 placeholder="Ask Ghost AI to design or refine this system"
@@ -203,10 +282,15 @@ const AiWorkspaceSidebar = ({
               />
               <Button
                 className="w-full rounded-xl bg-ai text-primary-text hover:bg-ai/90"
+                disabled={isSubmitting || input.trim().length === 0}
                 type="submit"
               >
-                <Send className="h-4 w-4" />
-                Send
+                {isSubmitting ? (
+                  <LoaderCircle className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+                {isSubmitting ? "Generating" : "Send"}
               </Button>
             </form>
           </TabsContent>

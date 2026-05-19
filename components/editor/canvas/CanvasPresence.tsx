@@ -11,6 +11,7 @@ interface CollaboratorInfo {
   avatar: string;
   color: string;
   name: string;
+  thinking: boolean;
   userId: string;
 }
 
@@ -33,6 +34,7 @@ const CanvasPresence = () => {
       avatar: other.info.avatar,
       color: other.info.color,
       name: other.info.name,
+      thinking: other.presence.thinking,
       userId: other.id,
     }),
     shallow,
@@ -53,7 +55,7 @@ const CanvasPresence = () => {
               <div
                 aria-label={collaborator.name}
                 className={cn(
-                  "flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-bg-base bg-bg-subtle text-xs font-semibold text-copy-primary shadow-sm",
+                  "relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-bg-base bg-bg-subtle text-xs font-semibold text-copy-primary shadow-sm",
                   index > 0 && "-ml-2",
                 )}
                 key={collaborator.userId}
@@ -69,6 +71,9 @@ const CanvasPresence = () => {
                   />
                 ) : (
                   <span>{getInitials(collaborator.name)}</span>
+                )}
+                {collaborator.thinking && (
+                  <span className="absolute right-0 top-0 h-2.5 w-2.5 rounded-full border border-bg-base bg-ai shadow-sm shadow-bg-base/30" />
                 )}
               </div>
             ))}
