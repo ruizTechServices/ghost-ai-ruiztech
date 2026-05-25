@@ -1,5 +1,6 @@
 "use client";
 
+import { useRealtimeRun } from "@trigger.dev/react-hooks";
 import {
   useBroadcastEvent,
   useEventListener,
@@ -41,12 +42,14 @@ import {
   isAiChatFeedMessage,
   isAiStatusActive,
   type AiChatFeedMessage,
+  type AiChatRole,
+  type AiChatSender,
 } from "@/types/tasks";
 
 const STARTER_MESSAGES = [
-  "Can someone review the database boundary?",
-  "I think the queue should sit before the worker pool.",
-  "Let's confirm the API gateway responsibilities.",
+  "Design a resilient ecommerce checkout architecture.",
+  "Add async workers for generated documents and snapshots.",
+  "Map a multi-tenant SaaS backend with Clerk and Supabase.",
 ] as const;
 
 const MAX_CHAT_MESSAGES = 200;
@@ -58,8 +61,95 @@ interface AiWorkspaceSidebarProps {
   statusEvents: AiStatusEvent[];
 }
 
+interface DesignRunState {
+  publicToken: string;
+  runId: string;
+}
+
+const GHOST_AI_SENDER: AiChatSender = {
+  avatar: "",
+  color: "var(--accent-user)",
+  id: "ghost-ai",
+  name: "Ghost AI",
+};
+
 const createChatMessageId = (): string =>
   `chat-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const getStringField = (value: unknown, key: string): string | null => {
+  if (!isRecord(value) || typeof value[key] !== "string") return null;
+
+  const field = value[key].trim();
+  return field.length > 0 ? field : null;
+};
+
+const readResponseBody = async (response: Response): Promise<unknown> =>
+  response.json().catch(() => null);
+
+const getApiErrorMessage = (body: unknown, fallback: string): string => {
+  if (isRecord(body) && isRecord(body.error)) {
+    const message = getStringField(body.error, "message");
+    if (message) return message;
+  }
+
+  return fallback;
+};
+
+const fetchDesignRunPublicToken = async (runId: string): Promise<string> => {
+  const response = await fetch("/api/ai/design/token", {
+    body: JSON.stringify({ runId }),
+    headers: { "Content-Type": "application/json" },
+    method: "POST",
+  });
+  const body = await readResponseBody(response);
+
+  if (!response.ok) {
+    throw new Error(
+      getApiErrorMessage(body, "Failed to create design run token."),
+    );
+  }
+
+  const publicToken =
+    getStringField(body, "publicToken") ?? getStringField(body, "token");
+
+  if (!publicToken) {
+    throw new Error("Design run token response was invalid.");
+  }
+
+  return publicToken;
+};
+
+const startDesignRun = async (
+  prompt: string,
+  roomId: string,
+): Promise<DesignRunState> => {
+  const response = await fetch("/api/ai/design", {
+    body: JSON.stringify({ projectId: roomId, prompt, roomId }),
+    headers: { "Content-Type": "application/json" },
+    method: "POST",
+  });
+  const body = await readResponseBody(response);
+
+  if (!response.ok) {
+    throw new Error(
+      getApiErrorMessage(body, "Failed to start design generation."),
+    );
+  }
+
+  const runId = getStringField(body, "runId");
+  if (!runId) {
+    throw new Error("Design run response did not include a run ID.");
+  }
+
+  const publicToken =
+    getStringField(body, "publicToken") ??
+    (await fetchDesignRunPublicToken(runId));
+
+  return { publicToken, runId };
+};
 
 const formatChatTimestamp = (timestamp: string): string => {
   const date = new Date(timestamp);
@@ -71,6 +161,12 @@ const formatChatTimestamp = (timestamp: string): string => {
   });
 };
 
+const formatRunStatus = (status: string): string =>
+  status.toLowerCase().replaceAll("_", " ");
+
+const isSuccessfulRunStatus = (status: string): boolean =>
+  status === "COMPLETED" || status === "COMPLETED_SUCCESSFULLY";
+
 const AiWorkspaceSidebar = ({
   isOpen,
   onOpenChange,
@@ -80,16 +176,35 @@ const AiWorkspaceSidebar = ({
   const broadcastEvent = useBroadcastEvent();
   const self = useSelf();
   const [input, setInput] = useState("");
-  const [isSending, setIsSending] = useState(false);
-  const [sendError, setSendError] = useState("");
+  const [isSubmittingPrompt, setIsSubmittingPrompt] = useState(false);
+  const [designRun, setDesignRun] = useState<DesignRunState | null>(null);
   const [chatMessages, setChatMessages] = useState<AiChatFeedMessage[]>([]);
+  const completedRunIdsRef = useRef<Set<string>>(new Set());
+  const realtimeErrorRunIdRef = useRef<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const latestStatusEvent = statusEvents.at(-1) ?? null;
   const latestStatusText = latestStatusEvent
     ? getAiStatusFeedText(latestStatusEvent)
     : "";
-  const isGenerationActive = isAiStatusActive(latestStatusEvent);
+  const isSharedGenerationActive = isAiStatusActive(latestStatusEvent);
+  const isLocalDesignRunActive = designRun !== null;
+  const isPromptRunning = isSubmittingPrompt || isLocalDesignRunActive;
+  const arePromptControlsDisabled = isPromptRunning || isSharedGenerationActive;
+  const shouldShowStatusStrip = isPromptRunning || isSharedGenerationActive;
+  const statusStripText =
+    latestStatusText ||
+    (isSubmittingPrompt
+      ? "Starting Ghost AI..."
+      : "Ghost AI is working on this canvas.");
+  const { error: realtimeRunError, run: realtimeRun } = useRealtimeRun(
+    designRun?.runId,
+    {
+      accessToken: designRun?.publicToken,
+      enabled: Boolean(designRun),
+      id: designRun?.runId ?? `design-run-idle-${roomId}`,
+    },
+  );
   const visibleChatMessages = useMemo(
     () =>
       [...chatMessages].sort(
@@ -110,6 +225,56 @@ const AiWorkspaceSidebar = ({
     });
   }, []);
 
+  const publishChatMessage = useCallback(
+    (message: AiChatFeedMessage): boolean => {
+      if (!isAiChatFeedMessage(message)) return false;
+
+      try {
+        broadcastEvent(message);
+      } catch {
+        appendChatMessage(message);
+        return false;
+      }
+
+      appendChatMessage(message);
+      return true;
+    },
+    [appendChatMessage, broadcastEvent],
+  );
+
+  const createChatMessage = useCallback(
+    (role: AiChatRole, content: string): AiChatFeedMessage => {
+      const sender =
+        role === "assistant"
+          ? GHOST_AI_SENDER
+          : {
+              avatar: self.info.avatar,
+              color: self.info.color,
+              id: self.id,
+              name: self.info.name || "You",
+            };
+
+      return {
+        content,
+        feed: AI_CHAT_FEED,
+        id: createChatMessageId(),
+        role,
+        roomId,
+        sender,
+        timestamp: new Date().toISOString(),
+        type: AI_CHAT_EVENT_TYPE,
+      };
+    },
+    [roomId, self.id, self.info.avatar, self.info.color, self.info.name],
+  );
+
+  const publishAssistantMessage = useCallback(
+    (content: string): void => {
+      publishChatMessage(createChatMessage("assistant", content));
+    },
+    [createChatMessage, publishChatMessage],
+  );
+
   useEventListener(({ event }) => {
     if (!isAiChatFeedMessage(event) || event.roomId !== roomId) return;
 
@@ -128,44 +293,75 @@ const AiWorkspaceSidebar = ({
     chatEndRef.current?.scrollIntoView({ block: "end" });
   }, [visibleChatMessages.length]);
 
-  const handleSubmit = (event?: FormEvent<HTMLFormElement>): void => {
+  useEffect(() => {
+    if (!realtimeRun?.finishedAt) return;
+
+    const completedRunId = realtimeRun.id;
+    if (completedRunIdsRef.current.has(completedRunId)) return;
+
+    completedRunIdsRef.current.add(completedRunId);
+
+    const runStatus = String(realtimeRun.status);
+    publishAssistantMessage(
+      isSuccessfulRunStatus(runStatus)
+        ? "Ghost AI finished updating the canvas."
+        : `Ghost AI stopped before completing the canvas update (${formatRunStatus(
+            runStatus,
+          )}).`,
+    );
+    setDesignRun((current) =>
+      current?.runId === completedRunId ? null : current,
+    );
+    setIsSubmittingPrompt(false);
+  }, [
+    publishAssistantMessage,
+    realtimeRun?.finishedAt,
+    realtimeRun?.id,
+    realtimeRun?.status,
+  ]);
+
+  useEffect(() => {
+    if (!realtimeRunError || !designRun) return;
+
+    if (realtimeErrorRunIdRef.current === designRun.runId) return;
+    realtimeErrorRunIdRef.current = designRun.runId;
+
+    publishAssistantMessage(
+      `Ghost AI status tracking failed. ${realtimeRunError.message}`,
+    );
+    setDesignRun(null);
+    setIsSubmittingPrompt(false);
+  }, [designRun, publishAssistantMessage, realtimeRunError]);
+
+  const handleSubmit = async (
+    event?: FormEvent<HTMLFormElement>,
+  ): Promise<void> => {
     event?.preventDefault();
 
     const trimmedInput = input.trim();
-    if (!trimmedInput || isSending) return;
+    if (!trimmedInput || arePromptControlsDisabled) return;
 
-    const chatMessage: AiChatFeedMessage = {
-      content: trimmedInput,
-      feed: AI_CHAT_FEED,
-      id: createChatMessageId(),
-      role: "user",
-      roomId,
-      sender: {
-        avatar: self.info.avatar,
-        color: self.info.color,
-        id: self.id,
-        name: self.info.name || "You",
-      },
-      timestamp: new Date().toISOString(),
-      type: AI_CHAT_EVENT_TYPE,
-    };
+    const chatMessage = createChatMessage("user", trimmedInput);
 
-    if (!isAiChatFeedMessage(chatMessage)) {
-      setSendError("Message could not be validated.");
+    if (!publishChatMessage(chatMessage)) {
+      publishAssistantMessage("Message could not be shared with the room.");
       return;
     }
 
-    setIsSending(true);
+    setInput("");
+    setIsSubmittingPrompt(true);
 
     try {
-      broadcastEvent(chatMessage);
-      appendChatMessage(chatMessage);
-      setInput("");
-      setSendError("");
-    } catch {
-      setSendError("Message could not be sent. Try again.");
+      setDesignRun(await startDesignRun(trimmedInput, roomId));
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Failed to start design generation.";
+
+      publishAssistantMessage(`Ghost AI could not start. ${message}`);
     } finally {
-      setIsSending(false);
+      setIsSubmittingPrompt(false);
     }
   };
 
@@ -219,21 +415,6 @@ const AiWorkspaceSidebar = ({
         </div>
 
         <Tabs className="min-h-0 flex-1 px-4 py-4" defaultValue="architect">
-          {(isGenerationActive || latestStatusText) && (
-            <div className="mb-3 flex items-center gap-2 rounded-xl border border-surface-border bg-bg-subtle/70 px-3 py-2 text-xs text-copy-muted">
-              {isGenerationActive ? (
-                <LoaderCircle className="h-3.5 w-3.5 shrink-0 animate-spin text-accent-text" />
-              ) : (
-                <span className="h-2 w-2 shrink-0 rounded-full bg-state-success" />
-              )}
-              <span className="min-w-0 truncate">
-                {latestStatusText ||
-                  (isGenerationActive
-                    ? "Ghost AI is working on this canvas."
-                    : "Ghost AI is ready.")}
-              </span>
-            </div>
-          )}
           <TabsList className="grid w-full grid-cols-2 rounded-xl bg-bg-subtle">
             <TabsTrigger
               className="text-muted-text data-active:bg-accent data-active:text-accent-foreground"
@@ -261,17 +442,17 @@ const AiWorkspaceSidebar = ({
                   </div>
                   <div>
                     <p className="text-sm font-medium text-primary-text">
-                      Start a room chat
+                      Start an AI design run
                     </p>
                     <p className="mt-1 max-w-56 text-xs leading-5 text-muted-text">
-                      Share design notes with collaborators in this workspace.
+                      Prompt Ghost AI to update the shared architecture canvas.
                     </p>
                   </div>
                   <div className="flex flex-wrap justify-center gap-2">
                     {STARTER_MESSAGES.map((message) => (
                       <button
                         className="rounded-full bg-subtle px-3 py-1.5 text-xs font-medium text-accent-text transition-colors hover:bg-bg-elevated disabled:cursor-not-allowed disabled:opacity-50"
-                        disabled={isSending}
+                        disabled={arePromptControlsDisabled}
                         key={message}
                         onClick={() => setInput(message)}
                         type="button"
@@ -285,6 +466,7 @@ const AiWorkspaceSidebar = ({
                 <div className="space-y-3">
                   {visibleChatMessages.map((message) => {
                     const isOwnMessage = message.sender.id === self.id;
+                    const isUserMessage = message.role === "user";
                     const isAssistant = message.role === "assistant";
 
                     return (
@@ -292,13 +474,23 @@ const AiWorkspaceSidebar = ({
                         className={cn(
                           "max-w-[88%] rounded-2xl px-3 py-2 text-sm leading-5",
                           isOwnMessage
-                            ? "ml-auto border-2 border-brand/50 bg-brand-dim text-copy-primary"
-                            : "mr-auto border border-surface-border bg-elevated text-copy-primary",
-                          isAssistant && "text-accent-text",
+                            ? "ml-auto"
+                            : "mr-auto",
+                          isUserMessage
+                            ? "border border-user-accent/40 bg-user-accent text-bg-base"
+                            : "border border-surface-border bg-elevated text-copy-primary",
+                          isAssistant && "bg-bg-subtle text-copy-primary",
                         )}
                         key={message.id}
                       >
-                        <div className="mb-1 flex items-center justify-between gap-2 text-[11px] leading-none text-muted-text">
+                        <div
+                          className={cn(
+                            "mb-1 flex items-center justify-between gap-2 text-[11px] leading-none",
+                            isUserMessage
+                              ? "text-bg-base/70"
+                              : "text-muted-text",
+                          )}
+                        >
                           <span className="min-w-0 truncate font-medium">
                             {isOwnMessage ? "You" : message.sender.name}
                           </span>
@@ -321,32 +513,39 @@ const AiWorkspaceSidebar = ({
             </div>
 
             <form className="mt-3 space-y-2" onSubmit={handleSubmit}>
+              {shouldShowStatusStrip && (
+                <div className="flex items-center gap-2 rounded-xl border border-user-accent/40 bg-bg-subtle/80 px-3 py-2 text-xs text-copy-secondary">
+                  <LoaderCircle className="h-3.5 w-3.5 shrink-0 animate-spin text-user-accent" />
+                  <span className="min-w-0 truncate">{statusStripText}</span>
+                </div>
+              )}
               <Textarea
                 className="max-h-40 min-h-[72px] resize-none rounded-2xl border-surface-border bg-bg-subtle/70 text-sm text-copy-primary placeholder:text-muted-text"
-                disabled={isSending}
+                disabled={arePromptControlsDisabled}
                 onChange={(event) => setInput(event.target.value)}
                 onKeyDown={handleInputKeyDown}
-                placeholder="Message collaborators in this room"
+                placeholder="Ask Ghost AI to update this system design"
                 ref={textareaRef}
                 rows={3}
                 value={input}
               />
-              {sendError && (
-                <p className="text-xs leading-5 text-state-error">
-                  {sendError}
-                </p>
-              )}
               <Button
-                className="w-full rounded-xl bg-ai text-primary-text hover:bg-ai/90"
-                disabled={isSending || input.trim().length === 0}
+                className="w-full rounded-xl bg-user-accent text-bg-base hover:bg-user-accent/90"
+                disabled={
+                  arePromptControlsDisabled || input.trim().length === 0
+                }
                 type="submit"
               >
-                {isSending ? (
+                {arePromptControlsDisabled ? (
                   <LoaderCircle className="h-4 w-4 animate-spin" />
                 ) : (
                   <Send className="h-4 w-4" />
                 )}
-                {isSending ? "Sending" : "Send"}
+                {isSubmittingPrompt
+                  ? "Starting"
+                  : isLocalDesignRunActive || isSharedGenerationActive
+                    ? "Running"
+                    : "Send"}
               </Button>
             </form>
           </TabsContent>

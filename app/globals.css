@@ -26,6 +26,7 @@
     --color-muted-text: var(--text-muted);
     --color-brand: var(--accent-primary);
     --color-brand-dim: var(--accent-primary-dim);
+    --color-user-accent: var(--accent-user);
     --color-accent-dim: var(--accent-primary-dim);
     --color-ai: var(--accent-ai);
     --color-ai-text: var(--accent-ai-text);
@@ -86,6 +87,7 @@
     --text-faint: #505060;
     --accent-primary: #00c8d4;
     --accent-primary-dim: rgba(0, 200, 212, 0.12);
+    --accent-user: #62c073;
     --accent-ai: #6457f9;
     --accent-ai-text: #8b82ff;
     --canvas-edge: #f8fafc;
