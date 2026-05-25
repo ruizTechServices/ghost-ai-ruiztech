@@ -10,6 +10,7 @@ Ghost AI RuizTech is a Next.js App Router workspace for collaborative system des
 - Supabase Storage for canvas snapshots and generated Markdown specs.
 - Liveblocks and React Flow for real-time collaborative canvas editing.
 - Trigger.dev for durable AI generation workflows.
+- OpenAI Responses API for design planning and backend spec drafting.
 
 ## Supabase Role
 
@@ -60,5 +61,7 @@ Open `http://localhost:3000` in your browser.
 - Use Supabase Storage for canvas snapshots and generated Markdown specs.
 - Verify Supabase-backed project ownership before issuing Liveblocks room tokens or mutating project resources.
 - Trigger design-generation work through `POST /api/ai/design` and issue short-lived run-scoped realtime tokens through `POST /api/ai/design/token`.
-- OpenAI API access is centralized under `lib/openai` and must stay server-only.
+- Trigger spec-generation work through `POST /api/ai/spec` and issue one-hour run-scoped realtime tokens through `POST /api/ai/spec/token`.
+- Download persisted Markdown specs through `GET /api/projects/{projectId}/specs/{specId}/download`; the route verifies access before reading Supabase Storage.
+- OpenAI API access must stay server-only.
 - Follow the context files in `context/` before implementing new subsystems.

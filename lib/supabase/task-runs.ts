@@ -6,9 +6,10 @@ import type { Database } from "@/lib/supabase/database.types";
 type TaskRunRow = Database["public"]["Tables"]["task_runs"]["Row"];
 type TaskRunInsert = Database["public"]["Tables"]["task_runs"]["Insert"];
 
-type TaskRunType = "design_generation";
+type TaskRunType = "design_generation" | "spec_generation";
 
 const TASK_TYPE_DESIGN_GENERATION = "design_generation" satisfies TaskRunType;
+const TASK_TYPE_SPEC_GENERATION = "spec_generation" satisfies TaskRunType;
 
 const taskRunSelect =
   "id, run_id, project_id, user_id, task_type, created_at";
@@ -83,5 +84,6 @@ export {
   getTaskRunByRunId,
   getTaskRunForUser,
   TASK_TYPE_DESIGN_GENERATION,
+  TASK_TYPE_SPEC_GENERATION,
 };
 export type { TaskRunRow, TaskRunType };

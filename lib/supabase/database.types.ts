@@ -40,6 +40,35 @@ export type Database = {
           },
         ]
       }
+      project_specs: {
+        Row: {
+          created_at: string
+          file_path: string
+          id: string
+          project_id: string
+        }
+        Insert: {
+          created_at?: string
+          file_path: string
+          id?: string
+          project_id: string
+        }
+        Update: {
+          created_at?: string
+          file_path?: string
+          id?: string
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_specs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projects: {
         Row: {
           canvas_json_path: string | null
