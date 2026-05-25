@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type { AiStatusEvent } from "@/types/ai-design";
+import { getAiStatusFeedText, isAiStatusActive } from "@/types/tasks";
 
 const STARTER_PROMPTS = [
   "Design an e-commerce backend",
@@ -59,22 +60,31 @@ const AiWorkspaceSidebar = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const latestStatusEvent = statusEvents.at(-1) ?? null;
+  const latestStatusText = latestStatusEvent
+    ? getAiStatusFeedText(latestStatusEvent)
+    : "";
+  const isGenerationActive =
+    isSubmitting || isAiStatusActive(latestStatusEvent);
   const visibleMessages = useMemo<ChatMessage[]>(() => {
-    const statusMessages = statusEvents.map(
-      (event): ChatMessage => ({
-        content: event.message,
-        createdAt: event.createdAt,
-        id: event.id,
-        role: "assistant",
-      }),
-    );
+    const latestStatusMessage: ChatMessage[] =
+      latestStatusEvent && latestStatusText
+        ? [
+            {
+              content: latestStatusText,
+              createdAt: latestStatusEvent.createdAt,
+              id: latestStatusEvent.id,
+              role: "assistant",
+            },
+          ]
+        : [];
 
-    return [...messages, ...statusMessages].sort(
+    return [...messages, ...latestStatusMessage].sort(
       (first, second) =>
         new Date(first.createdAt).getTime() -
         new Date(second.createdAt).getTime(),
     );
-  }, [messages, statusEvents]);
+  }, [latestStatusEvent, latestStatusText, messages]);
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -90,7 +100,7 @@ const AiWorkspaceSidebar = ({
     event?.preventDefault();
 
     const trimmedInput = input.trim();
-    if (!trimmedInput || isSubmitting) return;
+    if (!trimmedInput || isGenerationActive) return;
 
     const createdAt = new Date().toISOString();
     setMessages((current) => [
@@ -100,12 +110,6 @@ const AiWorkspaceSidebar = ({
         content: trimmedInput,
         id: `user-${Date.now()}`,
         role: "user",
-      },
-      {
-        createdAt,
-        content: "Starting Ghost AI on this canvas.",
-        id: `assistant-starting-${Date.now()}`,
-        role: "assistant",
       },
     ]);
     setInput("");
@@ -203,6 +207,21 @@ const AiWorkspaceSidebar = ({
         </div>
 
         <Tabs className="min-h-0 flex-1 px-4 py-4" defaultValue="architect">
+          {(isGenerationActive || latestStatusText) && (
+            <div className="mb-3 flex items-center gap-2 rounded-xl border border-surface-border bg-bg-subtle/70 px-3 py-2 text-xs text-copy-muted">
+              {isGenerationActive ? (
+                <LoaderCircle className="h-3.5 w-3.5 shrink-0 animate-spin text-accent-text" />
+              ) : (
+                <span className="h-2 w-2 shrink-0 rounded-full bg-state-success" />
+              )}
+              <span className="min-w-0 truncate">
+                {latestStatusText ||
+                  (isGenerationActive
+                    ? "Ghost AI is working on this canvas."
+                    : "Ghost AI is ready.")}
+              </span>
+            </div>
+          )}
           <TabsList className="grid w-full grid-cols-2 rounded-xl bg-bg-subtle">
             <TabsTrigger
               className="text-muted-text data-active:bg-accent data-active:text-accent-foreground"
@@ -240,7 +259,8 @@ const AiWorkspaceSidebar = ({
                   <div className="flex flex-wrap justify-center gap-2">
                     {STARTER_PROMPTS.map((prompt) => (
                       <button
-                        className="rounded-full bg-subtle px-3 py-1.5 text-xs font-medium text-accent-text transition-colors hover:bg-bg-elevated"
+                        className="rounded-full bg-subtle px-3 py-1.5 text-xs font-medium text-accent-text transition-colors hover:bg-bg-elevated disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={isGenerationActive}
                         key={prompt}
                         onClick={() => setInput(prompt)}
                         type="button"
@@ -272,7 +292,7 @@ const AiWorkspaceSidebar = ({
             <form className="mt-3 space-y-2" onSubmit={handleSubmit}>
               <Textarea
                 className="max-h-40 min-h-[72px] resize-none rounded-2xl border-surface-border bg-bg-subtle/70 text-sm text-copy-primary placeholder:text-muted-text"
-                disabled={isSubmitting}
+                disabled={isGenerationActive}
                 onChange={(event) => setInput(event.target.value)}
                 onKeyDown={handleInputKeyDown}
                 placeholder="Ask Ghost AI to design or refine this system"
@@ -282,15 +302,15 @@ const AiWorkspaceSidebar = ({
               />
               <Button
                 className="w-full rounded-xl bg-ai text-primary-text hover:bg-ai/90"
-                disabled={isSubmitting || input.trim().length === 0}
+                disabled={isGenerationActive || input.trim().length === 0}
                 type="submit"
               >
-                {isSubmitting ? (
+                {isGenerationActive ? (
                   <LoaderCircle className="h-4 w-4 animate-spin" />
                 ) : (
                   <Send className="h-4 w-4" />
                 )}
-                {isSubmitting ? "Generating" : "Send"}
+                {isGenerationActive ? "Generating" : "Send"}
               </Button>
             </form>
           </TabsContent>

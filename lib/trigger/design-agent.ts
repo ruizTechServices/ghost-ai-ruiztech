@@ -26,6 +26,7 @@ import {
   saveCanvasSnapshot,
 } from "@/lib/supabase/canvas-snapshots";
 import type { AiDesignStatus, AiStatusEvent } from "@/types/ai-design";
+import { AI_STATUS_FEED } from "@/types/tasks";
 import {
   getCanvasNodeColorPair,
   SHAPE_DEFAULT_SIZES,
@@ -641,12 +642,14 @@ const createStatusPublisher = ({
 
     const event: AiStatusEvent = {
       createdAt: new Date().toISOString(),
+      feed: AI_STATUS_FEED,
       id: `${runId}-${status}-${statusCounter}`,
       message,
       projectId,
       roomId,
       runId,
       status,
+      text: message,
       type: "ai-status",
     };
 

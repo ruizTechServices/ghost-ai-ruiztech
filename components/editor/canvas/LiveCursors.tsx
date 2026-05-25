@@ -1,11 +1,13 @@
 "use client";
 
 import { shallow, useOthersMapped } from "@liveblocks/react/suspense";
+import { LoaderCircle } from "lucide-react";
 
 interface CursorInfo {
   color: string;
   cursor: { x: number; y: number } | null;
   name: string;
+  thinking: boolean;
   userId: string;
 }
 
@@ -19,6 +21,7 @@ const LiveCursors = ({ currentUserId }: LiveCursorsProps) => {
       color: other.info.color,
       cursor: other.presence.cursor,
       name: other.info.name,
+      thinking: other.presence.thinking,
       userId: other.id,
     }),
     shallow,
@@ -47,13 +50,16 @@ const LiveCursors = ({ currentUserId }: LiveCursorsProps) => {
               }}
             />
             <div
-              className="ml-3 mt-1 max-w-40 truncate rounded-xl px-2 py-1 text-xs font-semibold shadow-lg shadow-bg-base/30"
+              className="ml-3 mt-1 flex max-w-40 items-center gap-1.5 rounded-xl px-2 py-1 text-xs font-semibold shadow-lg shadow-bg-base/30"
               style={{
                 backgroundColor: participant.color,
                 color: "var(--bg-base)",
               }}
             >
-              {participant.name}
+              <span className="truncate">{participant.name}</span>
+              {participant.thinking && (
+                <LoaderCircle className="h-3 w-3 shrink-0 animate-spin" />
+              )}
             </div>
           </div>
         );

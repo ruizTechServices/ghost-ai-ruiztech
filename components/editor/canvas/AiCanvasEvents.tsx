@@ -3,6 +3,7 @@
 import { useEventListener } from "@liveblocks/react/suspense";
 
 import type { AiStatusEvent } from "@/types/ai-design";
+import { isAiStatusFeedMessage } from "@/types/tasks";
 
 interface AiCanvasEventsProps {
   onStatusEvent?: (event: AiStatusEvent) => void;
@@ -10,7 +11,7 @@ interface AiCanvasEventsProps {
 
 const AiCanvasEvents = ({ onStatusEvent }: AiCanvasEventsProps) => {
   useEventListener(({ event }) => {
-    if (!onStatusEvent || event.type !== "ai-status") return;
+    if (!onStatusEvent || !isAiStatusFeedMessage(event)) return;
 
     onStatusEvent(event);
   });
