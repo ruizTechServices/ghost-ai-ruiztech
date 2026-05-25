@@ -25,6 +25,7 @@ import {
   type CanvasTemplate,
   type CanvasTemplateImportRequest,
 } from "@/components/editor/starter-templates";
+import { WorkspaceRoom } from "@/components/editor/WorkspaceRoom";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Tooltip,
@@ -202,26 +203,28 @@ const WorkspaceShell = ({
           />
         </aside>
 
-        <main className="flex min-w-0 flex-1 bg-base">
-          <div className="min-h-0 flex-1 bg-bg-base">
-            <Canvas
-              key={roomId}
-              onAiStatusEvent={handleAiStatusEvent}
-              onSaveStatusChange={setCanvasSaveState}
-              roomId={roomId}
-              templateImportRequest={templateImportRequest}
-            />
-          </div>
+        <WorkspaceRoom roomId={roomId}>
+          <main className="flex min-w-0 flex-1 bg-base">
+            <div className="min-h-0 flex-1 bg-bg-base">
+              <Canvas
+                key={roomId}
+                onAiStatusEvent={handleAiStatusEvent}
+                onSaveStatusChange={setCanvasSaveState}
+                roomId={roomId}
+                templateImportRequest={templateImportRequest}
+              />
+            </div>
 
-          <AiWorkspaceSidebar
-            isOpen={isAiSidebarOpen}
-            onOpenChange={setIsAiSidebarOpen}
-            roomId={roomId}
-            statusEvents={aiStatusEvents.filter(
-              (statusEvent) => statusEvent.roomId === roomId,
-            )}
-          />
-        </main>
+            <AiWorkspaceSidebar
+              isOpen={isAiSidebarOpen}
+              onOpenChange={setIsAiSidebarOpen}
+              roomId={roomId}
+              statusEvents={aiStatusEvents.filter(
+                (statusEvent) => statusEvent.roomId === roomId,
+              )}
+            />
+          </main>
+        </WorkspaceRoom>
       </div>
 
       <ProjectDialogs actions={projectActions} />

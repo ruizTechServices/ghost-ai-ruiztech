@@ -1,4 +1,4 @@
-import type { AiStatusFeedMessage } from "@/types/tasks";
+import type { AiRoomEvent } from "@/types/tasks";
 
 declare global {
   interface Liveblocks {
@@ -18,7 +18,7 @@ declare global {
       };
     };
 
-    RoomEvent: AiStatusFeedMessage;
+    RoomEvent: AiRoomEvent;
 
     ThreadMetadata: Record<string, never>;
 

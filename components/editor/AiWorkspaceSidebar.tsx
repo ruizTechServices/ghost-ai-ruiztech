@@ -1,6 +1,11 @@
 "use client";
 
 import {
+  useBroadcastEvent,
+  useEventListener,
+  useSelf,
+} from "@liveblocks/react/suspense";
+import {
   Bot,
   Download,
   FileText,
@@ -10,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -28,20 +34,22 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type { AiStatusEvent } from "@/types/ai-design";
-import { getAiStatusFeedText, isAiStatusActive } from "@/types/tasks";
+import {
+  AI_CHAT_EVENT_TYPE,
+  AI_CHAT_FEED,
+  getAiStatusFeedText,
+  isAiChatFeedMessage,
+  isAiStatusActive,
+  type AiChatFeedMessage,
+} from "@/types/tasks";
 
-const STARTER_PROMPTS = [
-  "Design an e-commerce backend",
-  "Create a chat app architecture",
-  "Build a CI/CD pipeline",
+const STARTER_MESSAGES = [
+  "Can someone review the database boundary?",
+  "I think the queue should sit before the worker pool.",
+  "Let's confirm the API gateway responsibilities.",
 ] as const;
 
-interface ChatMessage {
-  createdAt: string;
-  content: string;
-  id: string;
-  role: "assistant" | "user";
-}
+const MAX_CHAT_MESSAGES = 200;
 
 interface AiWorkspaceSidebarProps {
   isOpen: boolean;
@@ -50,41 +58,63 @@ interface AiWorkspaceSidebarProps {
   statusEvents: AiStatusEvent[];
 }
 
+const createChatMessageId = (): string =>
+  `chat-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+const formatChatTimestamp = (timestamp: string): string => {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return "";
+
+  return date.toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+};
+
 const AiWorkspaceSidebar = ({
   isOpen,
   onOpenChange,
   roomId,
   statusEvents,
 }: AiWorkspaceSidebarProps) => {
+  const broadcastEvent = useBroadcastEvent();
+  const self = useSelf();
   const [input, setInput] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [isSending, setIsSending] = useState(false);
+  const [sendError, setSendError] = useState("");
+  const [chatMessages, setChatMessages] = useState<AiChatFeedMessage[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
   const latestStatusEvent = statusEvents.at(-1) ?? null;
   const latestStatusText = latestStatusEvent
     ? getAiStatusFeedText(latestStatusEvent)
     : "";
-  const isGenerationActive =
-    isSubmitting || isAiStatusActive(latestStatusEvent);
-  const visibleMessages = useMemo<ChatMessage[]>(() => {
-    const latestStatusMessage: ChatMessage[] =
-      latestStatusEvent && latestStatusText
-        ? [
-            {
-              content: latestStatusText,
-              createdAt: latestStatusEvent.createdAt,
-              id: latestStatusEvent.id,
-              role: "assistant",
-            },
-          ]
-        : [];
+  const isGenerationActive = isAiStatusActive(latestStatusEvent);
+  const visibleChatMessages = useMemo(
+    () =>
+      [...chatMessages].sort(
+        (first, second) =>
+          new Date(first.timestamp).getTime() -
+          new Date(second.timestamp).getTime(),
+      ),
+    [chatMessages],
+  );
 
-    return [...messages, ...latestStatusMessage].sort(
-      (first, second) =>
-        new Date(first.createdAt).getTime() -
-        new Date(second.createdAt).getTime(),
-    );
-  }, [latestStatusEvent, latestStatusText, messages]);
+  const appendChatMessage = useCallback((message: AiChatFeedMessage): void => {
+    setChatMessages((current) => {
+      if (current.some((chatMessage) => chatMessage.id === message.id)) {
+        return current;
+      }
+
+      return [...current, message].slice(-MAX_CHAT_MESSAGES);
+    });
+  }, []);
+
+  useEventListener(({ event }) => {
+    if (!isAiChatFeedMessage(event) || event.roomId !== roomId) return;
+
+    appendChatMessage(event);
+  });
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -94,66 +124,48 @@ const AiWorkspaceSidebar = ({
     textarea.style.height = `${Math.min(textarea.scrollHeight, 160)}px`;
   }, [input]);
 
-  const handleSubmit = async (
-    event?: FormEvent<HTMLFormElement>,
-  ): Promise<void> => {
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ block: "end" });
+  }, [visibleChatMessages.length]);
+
+  const handleSubmit = (event?: FormEvent<HTMLFormElement>): void => {
     event?.preventDefault();
 
     const trimmedInput = input.trim();
-    if (!trimmedInput || isGenerationActive) return;
+    if (!trimmedInput || isSending) return;
 
-    const createdAt = new Date().toISOString();
-    setMessages((current) => [
-      ...current,
-      {
-        createdAt,
-        content: trimmedInput,
-        id: `user-${Date.now()}`,
-        role: "user",
+    const chatMessage: AiChatFeedMessage = {
+      content: trimmedInput,
+      feed: AI_CHAT_FEED,
+      id: createChatMessageId(),
+      role: "user",
+      roomId,
+      sender: {
+        avatar: self.info.avatar,
+        color: self.info.color,
+        id: self.id,
+        name: self.info.name || "You",
       },
-    ]);
-    setInput("");
-    setIsSubmitting(true);
+      timestamp: new Date().toISOString(),
+      type: AI_CHAT_EVENT_TYPE,
+    };
+
+    if (!isAiChatFeedMessage(chatMessage)) {
+      setSendError("Message could not be validated.");
+      return;
+    }
+
+    setIsSending(true);
 
     try {
-      const response = await fetch("/api/ai/design", {
-        body: JSON.stringify({
-          projectId: roomId,
-          prompt: trimmedInput,
-          roomId,
-        }),
-        headers: {
-          "Content-Type": "application/json",
-        },
-        method: "POST",
-      });
-
-      if (!response.ok) {
-        const errorBody = (await response.json().catch(() => null)) as {
-          error?: { message?: string };
-        } | null;
-
-        throw new Error(
-          errorBody?.error?.message ?? "Failed to start design generation.",
-        );
-      }
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Failed to start design generation.";
-
-      setMessages((current) => [
-        ...current,
-        {
-          content: message,
-          createdAt: new Date().toISOString(),
-          id: `assistant-error-${Date.now()}`,
-          role: "assistant",
-        },
-      ]);
+      broadcastEvent(chatMessage);
+      appendChatMessage(chatMessage);
+      setInput("");
+      setSendError("");
+    } catch {
+      setSendError("Message could not be sent. Try again.");
     } finally {
-      setIsSubmitting(false);
+      setIsSending(false);
     }
   };
 
@@ -163,7 +175,7 @@ const AiWorkspaceSidebar = ({
     if (event.key !== "Enter" || event.shiftKey) return;
 
     event.preventDefault();
-    void handleSubmit();
+    handleSubmit();
   };
 
   return (
@@ -242,49 +254,68 @@ const AiWorkspaceSidebar = ({
             value="architect"
           >
             <div className="min-h-0 flex-1 overflow-y-auto rounded-2xl border border-surface-border bg-bg-surface/60 p-3">
-              {visibleMessages.length === 0 ? (
+              {visibleChatMessages.length === 0 ? (
                 <div className="flex h-full min-h-80 flex-col items-center justify-center gap-4 text-center">
                   <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-surface-border bg-bg-subtle text-accent-text">
                     <Bot className="h-8 w-8" />
                   </div>
                   <div>
                     <p className="text-sm font-medium text-primary-text">
-                      Start with a system goal
+                      Start a room chat
                     </p>
                     <p className="mt-1 max-w-56 text-xs leading-5 text-muted-text">
-                      Ask Ghost AI for an architecture draft, migration plan, or
-                      infrastructure outline.
+                      Share design notes with collaborators in this workspace.
                     </p>
                   </div>
                   <div className="flex flex-wrap justify-center gap-2">
-                    {STARTER_PROMPTS.map((prompt) => (
+                    {STARTER_MESSAGES.map((message) => (
                       <button
                         className="rounded-full bg-subtle px-3 py-1.5 text-xs font-medium text-accent-text transition-colors hover:bg-bg-elevated disabled:cursor-not-allowed disabled:opacity-50"
-                        disabled={isGenerationActive}
-                        key={prompt}
-                        onClick={() => setInput(prompt)}
+                        disabled={isSending}
+                        key={message}
+                        onClick={() => setInput(message)}
                         type="button"
                       >
-                        {prompt}
+                        {message}
                       </button>
                     ))}
                   </div>
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {visibleMessages.map((message) => (
-                    <div
-                      className={cn(
-                        "max-w-[86%] rounded-2xl px-3 py-2 text-sm leading-5",
-                        message.role === "user"
-                          ? "ml-auto border-2 border-brand/50 bg-brand-dim text-copy-primary"
-                          : "mr-auto border border-surface-border bg-elevated text-accent-text",
-                      )}
-                      key={message.id}
-                    >
-                      {message.content}
-                    </div>
-                  ))}
+                  {visibleChatMessages.map((message) => {
+                    const isOwnMessage = message.sender.id === self.id;
+                    const isAssistant = message.role === "assistant";
+
+                    return (
+                      <div
+                        className={cn(
+                          "max-w-[88%] rounded-2xl px-3 py-2 text-sm leading-5",
+                          isOwnMessage
+                            ? "ml-auto border-2 border-brand/50 bg-brand-dim text-copy-primary"
+                            : "mr-auto border border-surface-border bg-elevated text-copy-primary",
+                          isAssistant && "text-accent-text",
+                        )}
+                        key={message.id}
+                      >
+                        <div className="mb-1 flex items-center justify-between gap-2 text-[11px] leading-none text-muted-text">
+                          <span className="min-w-0 truncate font-medium">
+                            {isOwnMessage ? "You" : message.sender.name}
+                          </span>
+                          <time
+                            className="shrink-0 font-mono"
+                            dateTime={message.timestamp}
+                          >
+                            {formatChatTimestamp(message.timestamp)}
+                          </time>
+                        </div>
+                        <p className="whitespace-pre-wrap break-words">
+                          {message.content}
+                        </p>
+                      </div>
+                    );
+                  })}
+                  <div ref={chatEndRef} />
                 </div>
               )}
             </div>
@@ -292,25 +323,30 @@ const AiWorkspaceSidebar = ({
             <form className="mt-3 space-y-2" onSubmit={handleSubmit}>
               <Textarea
                 className="max-h-40 min-h-[72px] resize-none rounded-2xl border-surface-border bg-bg-subtle/70 text-sm text-copy-primary placeholder:text-muted-text"
-                disabled={isGenerationActive}
+                disabled={isSending}
                 onChange={(event) => setInput(event.target.value)}
                 onKeyDown={handleInputKeyDown}
-                placeholder="Ask Ghost AI to design or refine this system"
+                placeholder="Message collaborators in this room"
                 ref={textareaRef}
                 rows={3}
                 value={input}
               />
+              {sendError && (
+                <p className="text-xs leading-5 text-state-error">
+                  {sendError}
+                </p>
+              )}
               <Button
                 className="w-full rounded-xl bg-ai text-primary-text hover:bg-ai/90"
-                disabled={isGenerationActive || input.trim().length === 0}
+                disabled={isSending || input.trim().length === 0}
                 type="submit"
               >
-                {isGenerationActive ? (
+                {isSending ? (
                   <LoaderCircle className="h-4 w-4 animate-spin" />
                 ) : (
                   <Send className="h-4 w-4" />
                 )}
-                {isGenerationActive ? "Generating" : "Send"}
+                {isSending ? "Sending" : "Send"}
               </Button>
             </form>
           </TabsContent>

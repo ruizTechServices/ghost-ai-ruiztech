@@ -1,5 +1,9 @@
+import { z } from "zod";
+
 const AI_STATUS_FEED = "ai-status-feed";
 const AI_STATUS_EVENT_TYPE = "ai-status";
+const AI_CHAT_FEED = "ai-chat";
+const AI_CHAT_EVENT_TYPE = "ai-chat-message";
 
 const AI_TASK_STATUSES = [
   "started",
@@ -10,8 +14,10 @@ const AI_TASK_STATUSES = [
   "completed",
   "failed",
 ] as const;
+const AI_CHAT_ROLES = ["assistant", "user"] as const;
 
 type AiTaskStatus = (typeof AI_TASK_STATUSES)[number];
+type AiChatRole = (typeof AI_CHAT_ROLES)[number];
 
 interface AiStatusFeedMessage extends Record<string, string> {
   createdAt: string;
@@ -26,7 +32,47 @@ interface AiStatusFeedMessage extends Record<string, string> {
   type: typeof AI_STATUS_EVENT_TYPE;
 }
 
+interface AiChatSender extends Record<string, string> {
+  avatar: string;
+  color: string;
+  id: string;
+  name: string;
+}
+
+interface AiChatFeedMessage extends Record<string, string | AiChatSender> {
+  content: string;
+  feed: typeof AI_CHAT_FEED;
+  id: string;
+  role: AiChatRole;
+  roomId: string;
+  sender: AiChatSender;
+  timestamp: string;
+  type: typeof AI_CHAT_EVENT_TYPE;
+}
+
+type AiRoomEvent = AiStatusFeedMessage | AiChatFeedMessage;
+
 const statusValues = new Set<string>(AI_TASK_STATUSES);
+
+const aiChatFeedMessageSchema = z
+  .object({
+    content: z.string().trim().min(1),
+    feed: z.literal(AI_CHAT_FEED),
+    id: z.string().trim().min(1),
+    role: z.enum(AI_CHAT_ROLES),
+    roomId: z.string().trim().min(1),
+    sender: z
+      .object({
+        avatar: z.string(),
+        color: z.string(),
+        id: z.string().trim().min(1),
+        name: z.string().trim().min(1),
+      })
+      .strict(),
+    timestamp: z.string().datetime({ offset: true }),
+    type: z.literal(AI_CHAT_EVENT_TYPE),
+  })
+  .strict();
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -55,6 +101,10 @@ const isAiStatusFeedMessage = (
   isOptionalString(value.text) &&
   isOptionalString(value.message);
 
+const isAiChatFeedMessage = (
+  value: unknown,
+): value is AiChatFeedMessage => aiChatFeedMessageSchema.safeParse(value).success;
+
 const getAiStatusFeedText = (event: AiStatusFeedMessage): string =>
   (event.text ?? event.message ?? "").trim();
 
@@ -62,11 +112,22 @@ const isAiStatusActive = (event: AiStatusFeedMessage | null): boolean =>
   event !== null && event.status !== "completed" && event.status !== "failed";
 
 export {
+  AI_CHAT_EVENT_TYPE,
+  AI_CHAT_FEED,
+  AI_CHAT_ROLES,
   AI_STATUS_EVENT_TYPE,
   AI_STATUS_FEED,
   AI_TASK_STATUSES,
   getAiStatusFeedText,
+  isAiChatFeedMessage,
   isAiStatusActive,
   isAiStatusFeedMessage,
 };
-export type { AiStatusFeedMessage, AiTaskStatus };
+export type {
+  AiChatFeedMessage,
+  AiChatRole,
+  AiChatSender,
+  AiRoomEvent,
+  AiStatusFeedMessage,
+  AiTaskStatus,
+};
